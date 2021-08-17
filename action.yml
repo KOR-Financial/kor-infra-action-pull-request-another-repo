@@ -1,6 +1,12 @@
 name: 'Pull Request another repository'
 description: 'Used for pull request a copy of a folder to another repository'
 inputs:
+  title:
+    description: 'PR Title'
+    required: false
+  comment:
+    description: 'PR Comment'
+    required: false
   source_folder:
     description: 'Source folder from origin'
     required: true
