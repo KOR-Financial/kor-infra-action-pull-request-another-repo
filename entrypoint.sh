@@ -3,10 +3,31 @@
 set -e
 #set -x
 
-if [ -z "$INPUT_SOURCE_FOLDER" ]
+if [ -z "$INPUT_SOURCE_FOLDERS" ]
 then
-  echo "Source folder must be defined"
-  return -1
+  echo "Source folders must be defined"
+  exit -1
+fi
+
+if [ -z "$INPUT_DESTINATION_FOLDERS" ]
+then
+  echo "Destination folders must be defined"
+  exit -1
+fi
+
+IFS=';'
+read -ra SOURCE_FOLDERS <<< "$INPUT_SOURCE_FOLDERS"
+echo "Source folders [${SOURCE_FOLDERS[*]}]"
+echo "Source folders size = ${#SOURCE_FOLDERS[*]}"
+
+read -ra DESTINATION_FOLDERS <<< "$INPUT_DESTINATION_FOLDERS"
+echo "Destination folders [${DESTINATION_FOLDERS[*]}]"
+echo "Destination folders size = ${#DESTINATION_FOLDERS[*]}"
+
+if [  ${#DESTINATION_FOLDERS[*]} != ${#SOURCE_FOLDERS[*]} ]
+then
+  echo "Source and destination folders count is not match"
+  exit -1
 fi
 
 if [ $INPUT_DESTINATION_HEAD_BRANCH == "main" ] || [ $INPUT_DESTINATION_HEAD_BRANCH == "master"]
@@ -34,9 +55,13 @@ echo "Cloning destination git repository"
 git clone "https://$INPUT_USER_NAME:$API_TOKEN_GITHUB@github.com/$INPUT_DESTINATION_REPO.git" "$CLONE_DIR"
 
 echo "Copying contents to git repo"
-mkdir -p $CLONE_DIR/$INPUT_DESTINATION_FOLDER/
 
-cp $INPUT_SOURCE_FOLDER "$CLONE_DIR/$INPUT_DESTINATION_FOLDER/"
+for i in "${!SOURCE_FOLDERS[@]}"; do
+  echo "$i. source = ${SOURCE_FOLDERS[$i]}, dest = ${DESTINATION_FOLDERS[$i]}"
+  mkdir -p $CLONE_DIR/${DESTINATION_FOLDERS[$i]}/
+  cp ${SOURCE_FOLDERS[$i]} "$CLONE_DIR/${DESTINATION_FOLDERS[$i]}/"
+done
+
 cd "$CLONE_DIR"
 git checkout -b "$INPUT_DESTINATION_HEAD_BRANCH"
 

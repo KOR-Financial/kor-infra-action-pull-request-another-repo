@@ -8,6 +8,7 @@ RUN apk update && \
     git clone https://github.com/cli/cli.git gh-cli && \
     cd gh-cli && \
     make && \
+    apk add bash && \
     mv ./bin/gh /usr/local/bin/
 
 ADD entrypoint.sh /entrypoint.sh

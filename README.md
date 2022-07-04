@@ -18,9 +18,9 @@ This GitHub Action copies a folder from the current repository to a location in 
           env:
             API_TOKEN_GITHUB: ${{ secrets.API_TOKEN_GITHUB }}
           with:
-            source_folder: 'source-folder'
+            source_folders: 'source-folder'
             destination_repo: 'user-name/repository-name'
-            destination_folder: 'folder-name'
+            destination_folders: 'folder-name'
             destination_base_branch: 'branch-name'
             destination_head_branch: 'branch-name'
             user_email: 'user-name@paygo.com.br'
@@ -28,9 +28,9 @@ This GitHub Action copies a folder from the current repository to a location in 
             pull_request_reviewers: 'reviewers'
 
 ## Variables
-* source_folder: The folder to be moved. Uses the same syntax as the `cp` command. Incude the path for any files not in the repositories root directory.
+* source_folders: The folder (or ";" delimited folders) to be moved. Uses the same syntax as the `cp` command. Incude the path for any files not in the repositories root directory.
 * destination_repo: The repository to place the file or directory in.
-* destination_folder: [optional] The folder in the destination repository to place the file in, if not the root directory.
+* destination_folder:  The folder (or ";" delimited folders) in the destination repository to place the file in, if not the root directory.
 * user_email: The GitHub user email associated with the API token secret.
 * user_name: The GitHub username associated with the API token secret.
 * destination_base_branch: [optional] The branch into which you want your code merged. Default is `main`.
