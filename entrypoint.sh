@@ -59,6 +59,7 @@ echo "Copying contents to git repo"
 for i in "${!SOURCE_FOLDERS[@]}"; do
   echo "$i. source = ${SOURCE_FOLDERS[$i]}, dest = ${DESTINATION_FOLDERS[$i]}"
   mkdir -p $CLONE_DIR/${DESTINATION_FOLDERS[$i]}/
+  echo "ls ${SOURCE_FOLDERS[$i]}"
   ls ${SOURCE_FOLDERS[$i]}
   cp ${SOURCE_FOLDERS[$i]} "$CLONE_DIR/${DESTINATION_FOLDERS[$i]}/"
 done
