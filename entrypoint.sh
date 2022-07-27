@@ -80,6 +80,10 @@ then
                -B "$INPUT_DESTINATION_BASE_BRANCH" \
                -H "$INPUT_DESTINATION_HEAD_BRANCH"
                #"$PULL_REQUEST_REVIEWERS"
+
+  pr_number=$(gh pr list | grep $INPUT_DESTINATION_HEAD_BRANCH | awk '{print $1}')
+  echo "::set-output name=pr_number::$pr_number"
+
 else
   echo "No changes detected"
 fi

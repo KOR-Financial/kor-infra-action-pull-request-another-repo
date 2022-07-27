@@ -32,6 +32,11 @@ inputs:
   pull_request_reviewers:
     description: 'Pull request reviewers users'
     required: false
+
+outputs:
+  pr_number: # number of created pr
+    description: 'PR number'
+
 runs:
   using: 'docker'
   image: 'Dockerfile'
