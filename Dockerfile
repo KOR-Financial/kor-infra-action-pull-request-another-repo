@@ -1,11 +1,16 @@
-FROM alpine/git
+FROM alpine:3
 
-
-RUN wget -q  https://api.github.com/repos/cli/cli/releases/latest \
-    && wget -q $(cat latest | grep linux_amd64.tar.gz | grep browser_download_url | grep -v .asc | cut -d '"' -f 4) \
-    && tar -xvzf gh*.tar.gz \
-    && mv gh*/bin/gh /usr/local/bin/ \
-    && rm -fr *
+RUN apk update && \
+    apk upgrade && \
+    apk add git && \
+    apk add go && \
+    apk add make && \
+    git clone https://github.com/cli/cli.git gh-cli && \
+    cd gh-cli && \
+    make && \
+    apk add bash && \
+    mv ./bin/gh /usr/local/bin/
 
 ADD entrypoint.sh /entrypoint.sh
+
 ENTRYPOINT [ "/entrypoint.sh" ]
