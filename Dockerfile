@@ -1,4 +1,4 @@
-FROM 911848148261.dkr.ecr.us-east-1.amazonaws.com/kor-custom-github-actions:pull-request-another-repo
+FROM denys1yermakov/alpine:latest
 
 #All next steps base image already contain 
 # FROM alpine:3
