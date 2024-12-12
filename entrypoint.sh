@@ -30,7 +30,7 @@ then
   exit -1
 fi
 
-if [ $INPUT_DESTINATION_HEAD_BRANCH == "main" ] || [ $INPUT_DESTINATION_HEAD_BRANCH == "master"]
+if [ $INPUT_DESTINATION_HEAD_BRANCH == "main" ] || [ $INPUT_DESTINATION_HEAD_BRANCH == "master" ]
 then
   echo "Destination head branch cannot be 'main' nor 'master'"
   return -1
