@@ -38,17 +38,22 @@ outputs:
     description: 'PR number'
 
 runs:
-  using: 'docker'
-  image: 'Dockerfile'
-  args:
-    - ${{ inputs.source-folder }}
-    - ${{ inputs.destination-repo }}
-    - ${{ inputs.destination-folder }}
-    - ${{ inputs.user-email }}
-    - ${{ inputs.user-name }}
-    - ${{ inputs.destination-head-branch }}
-    - ${{ inputs.destination-base-branch }}
-    - ${{ inputs.pull-request-reviewers }}
+  using: 'composite'
+  steps:
+    - name: Run entrypoint script
+      shell: bash
+      run: bash ${{ github.action_path }}/entrypoint.sh
+      env:
+        INPUT_SOURCE_FOLDERS: ${{ inputs.source_folders }}
+        INPUT_DESTINATION_FOLDERS: ${{ inputs.destination_folders }}
+        INPUT_DESTINATION_REPO: ${{ inputs.destination_repo }}
+        INPUT_TITLE: ${{ inputs.title }}
+        INPUT_COMMENT: ${{ inputs.comment }}
+        INPUT_USER_EMAIL: ${{ inputs.user_email }}
+        INPUT_USER_NAME: ${{ inputs.user_name }}
+        INPUT_DESTINATION_HEAD_BRANCH: ${{ inputs.destination_head_branch }}
+        INPUT_DESTINATION_BASE_BRANCH: ${{ inputs.destination_base_branch }}
+        INPUT_PULL_REQUEST_REVIEWERS: ${{ inputs.pull_request_reviewers }}
 branding:
   icon: 'git-commit'
   color: 'green'
