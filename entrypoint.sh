@@ -119,10 +119,13 @@ then
       exit 1
     fi
 
-    echo "::warning::gh pr create hit GitHub throttling on attempt ${pr_create_attempt}/${PR_CREATE_MAX_ATTEMPTS}; retrying in ${pr_create_delay}s..."
     # Jitter (0..delay/2) so a burst of jobs that failed together do not retry
-    # in lockstep and re-trip the same limit.
-    sleep "$(( pr_create_delay + RANDOM % (pr_create_delay / 2 + 1) ))"
+    # in lockstep and re-trip the same limit; computed once so it is both logged
+    # and slept.
+    pr_jitter=$(( RANDOM % (pr_create_delay / 2 + 1) ))
+    pr_sleep=$(( pr_create_delay + pr_jitter ))
+    echo "::warning::gh pr create hit GitHub throttling on attempt ${pr_create_attempt}/${PR_CREATE_MAX_ATTEMPTS}; retrying in ${pr_sleep}s (base ${pr_create_delay}s + ${pr_jitter}s jitter)..."
+    sleep "$pr_sleep"
     pr_create_attempt=$((pr_create_attempt + 1))
     pr_create_delay=$((pr_create_delay * 2))
   done
