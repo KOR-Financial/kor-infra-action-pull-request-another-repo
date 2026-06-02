@@ -70,14 +70,51 @@ then
   git commit --message "$INPUT_TITLE"
   echo "Pushing git commit"
   git push -uf origin HEAD:$INPUT_DESTINATION_HEAD_BRANCH
-  echo "Creating a pull request"
-  gh pr create -t "$INPUT_TITLE" \
-               -b "$INPUT_COMMENT" \
-               -B "$INPUT_DESTINATION_BASE_BRANCH" \
-               -H "$INPUT_DESTINATION_HEAD_BRANCH"
-               #"$PULL_REQUEST_REVIEWERS"
 
-  pr_number=$(gh pr list | grep $INPUT_DESTINATION_HEAD_BRANCH | awk '{print $1}')
+  # Retry gh pr create with exponential backoff. A burst of simultaneous deploy
+  # merges fires many createPullRequest calls from the same identity within
+  # seconds, which GitHub rejects with its secondary rate limit ("was submitted
+  # too quickly"). The branch has already been pushed by this point, so a
+  # non-retried failure silently drops the promotion PR. The CLI output is
+  # captured here so the real error can be reported (and inspected by later logic).
+  PR_CREATE_MAX_ATTEMPTS="${PR_CREATE_MAX_ATTEMPTS:-5}"
+  pr_create_delay="${PR_CREATE_INITIAL_DELAY:-10}"
+  pr_create_attempt=1
+  while true; do
+    echo "Attempt ${pr_create_attempt}/${PR_CREATE_MAX_ATTEMPTS}: creating pull request for '${INPUT_DESTINATION_HEAD_BRANCH}'..."
+    if pr_create_output=$(gh pr create -t "$INPUT_TITLE" \
+                                       -b "$INPUT_COMMENT" \
+                                       -B "$INPUT_DESTINATION_BASE_BRANCH" \
+                                       -H "$INPUT_DESTINATION_HEAD_BRANCH" 2>&1)
+    then
+      echo "$pr_create_output"
+      break
+    fi
+    # Surface the real CLI error (e.g. the secondary-rate-limit message).
+    echo "$pr_create_output"
+
+    # Idempotency: a prior attempt may have created the PR even though the CLI
+    # reported an error. Match by exact --head (not a scan of the default 30-row
+    # list, which can miss the branch in a busy repo) and treat it as success.
+    if gh pr list --head "$INPUT_DESTINATION_HEAD_BRANCH" --state open | grep -q .
+    then
+      echo "A pull request for '${INPUT_DESTINATION_HEAD_BRANCH}' already exists; continuing."
+      break
+    fi
+
+    if [ "$pr_create_attempt" -ge "$PR_CREATE_MAX_ATTEMPTS" ]
+    then
+      echo "::error::gh pr create failed after ${PR_CREATE_MAX_ATTEMPTS} attempts. Last error: ${pr_create_output}"
+      exit 1
+    fi
+
+    echo "gh pr create failed on attempt ${pr_create_attempt}/${PR_CREATE_MAX_ATTEMPTS}; retrying in ${pr_create_delay}s..."
+    sleep "$pr_create_delay"
+    pr_create_attempt=$((pr_create_attempt + 1))
+    pr_create_delay=$((pr_create_delay * 2))
+  done
+
+  pr_number=$(gh pr list --head "$INPUT_DESTINATION_HEAD_BRANCH" --state all | awk 'NR==1{print $1}')
   echo "PR_NUMBER=$pr_number" >> "$GITHUB_OUTPUT"
   echo "PR_NUMBER=$pr_number" >> "$GITHUB_ENV"
 
