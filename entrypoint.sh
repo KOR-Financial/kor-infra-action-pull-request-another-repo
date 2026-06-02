@@ -88,6 +88,7 @@ then
                                        -H "$INPUT_DESTINATION_HEAD_BRANCH" 2>&1)
     then
       echo "$pr_create_output"
+      echo "::notice::Pull request for '${INPUT_DESTINATION_HEAD_BRANCH}' created on attempt ${pr_create_attempt}/${PR_CREATE_MAX_ATTEMPTS}."
       break
     fi
     # Surface the real CLI error (e.g. the secondary-rate-limit message).
@@ -98,7 +99,7 @@ then
     # list, which can miss the branch in a busy repo) and treat it as success.
     if gh pr list --head "$INPUT_DESTINATION_HEAD_BRANCH" --state open | grep -q .
     then
-      echo "A pull request for '${INPUT_DESTINATION_HEAD_BRANCH}' already exists; continuing."
+      echo "::notice::A pull request for '${INPUT_DESTINATION_HEAD_BRANCH}' already exists; treating as success after ${pr_create_attempt} attempt(s)."
       break
     fi
 
@@ -118,7 +119,7 @@ then
       exit 1
     fi
 
-    echo "gh pr create failed on attempt ${pr_create_attempt}/${PR_CREATE_MAX_ATTEMPTS}; retrying in ${pr_create_delay}s..."
+    echo "::warning::gh pr create hit GitHub throttling on attempt ${pr_create_attempt}/${PR_CREATE_MAX_ATTEMPTS}; retrying in ${pr_create_delay}s..."
     # Jitter (0..delay/2) so a burst of jobs that failed together do not retry
     # in lockstep and re-trip the same limit.
     sleep "$(( pr_create_delay + RANDOM % (pr_create_delay / 2 + 1) ))"
@@ -129,6 +130,11 @@ then
   pr_number=$(gh pr list --head "$INPUT_DESTINATION_HEAD_BRANCH" --state all | awk 'NR==1{print $1}')
   echo "PR_NUMBER=$pr_number" >> "$GITHUB_OUTPUT"
   echo "PR_NUMBER=$pr_number" >> "$GITHUB_ENV"
+
+  if [ -n "$GITHUB_STEP_SUMMARY" ]
+  then
+    echo "PR #${pr_number} (\`${INPUT_DESTINATION_HEAD_BRANCH}\` -> \`${INPUT_DESTINATION_BASE_BRANCH}\`) created after ${pr_create_attempt} attempt(s)." >> "$GITHUB_STEP_SUMMARY"
+  fi
 
 else
   echo "No changes detected"
