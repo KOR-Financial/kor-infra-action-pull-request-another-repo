@@ -119,7 +119,9 @@ then
     fi
 
     echo "gh pr create failed on attempt ${pr_create_attempt}/${PR_CREATE_MAX_ATTEMPTS}; retrying in ${pr_create_delay}s..."
-    sleep "$pr_create_delay"
+    # Jitter (0..delay/2) so a burst of jobs that failed together do not retry
+    # in lockstep and re-trip the same limit.
+    sleep "$(( pr_create_delay + RANDOM % (pr_create_delay / 2 + 1) ))"
     pr_create_attempt=$((pr_create_attempt + 1))
     pr_create_delay=$((pr_create_delay * 2))
   done
