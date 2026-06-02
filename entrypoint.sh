@@ -102,6 +102,16 @@ then
       break
     fi
 
+    # Only retry GitHub throttling. Genuine errors (bad credentials, validation,
+    # missing base branch, ...) never succeed on retry, so fail fast instead of
+    # burning the backoff window. Unrecognised errors also fail fast: no worse
+    # than the pre-retry behaviour, strictly better for the throttling case.
+    if ! printf '%s' "$pr_create_output" | grep -qiE 'submitted too quickly|secondary rate limit|abuse detection|too many requests|rate limit|try again later|retry your request|wait a few minutes'
+    then
+      echo "::error::gh pr create failed with a non-retryable error; not retrying. Error: ${pr_create_output}"
+      exit 1
+    fi
+
     if [ "$pr_create_attempt" -ge "$PR_CREATE_MAX_ATTEMPTS" ]
     then
       echo "::error::gh pr create failed after ${PR_CREATE_MAX_ATTEMPTS} attempts. Last error: ${pr_create_output}"
