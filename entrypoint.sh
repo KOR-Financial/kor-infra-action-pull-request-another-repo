@@ -41,6 +41,23 @@ then
   PULL_REQUEST_REVIEWERS='-r '$INPUT_PULL_REQUEST_REVIEWERS
 fi
 
+LABEL_ARGS=()
+if [ -n "$INPUT_LABELS" ]
+then
+  # Labels may be passed as a comma-separated list and/or multiline text.
+  # Normalise both forms by turning commas into newlines, then read each label.
+  while IFS= read -r label
+  do
+    label="${label#"${label%%[![:space:]]*}"}"  # trim leading whitespace
+    label="${label%"${label##*[![:space:]]}"}"  # trim trailing whitespace
+    if [ -n "$label" ]
+    then
+      LABEL_ARGS+=(--label "$label")
+    fi
+  done <<< "${INPUT_LABELS//,/$'\n'}"
+  echo "Labels [${LABEL_ARGS[*]}]"
+fi
+
 CLONE_DIR=$(mktemp -d)
 echo "env"
 env
@@ -74,7 +91,8 @@ then
   gh pr create -t "$INPUT_TITLE" \
                -b "$INPUT_COMMENT" \
                -B "$INPUT_DESTINATION_BASE_BRANCH" \
-               -H "$INPUT_DESTINATION_HEAD_BRANCH"
+               -H "$INPUT_DESTINATION_HEAD_BRANCH" \
+               "${LABEL_ARGS[@]}"
                #"$PULL_REQUEST_REVIEWERS"
 
   pr_number=$(gh pr list | grep $INPUT_DESTINATION_HEAD_BRANCH | awk '{print $1}')
