@@ -38,12 +38,14 @@ inputs:
 
 outputs:
   pr_number: # number of created pr
+    value: ${{steps.create-pr.outputs.PR_NUMBER}}
     description: 'PR number'
 
 runs:
   using: 'composite'
   steps:
     - name: Run entrypoint script
+      id: create-pr
       shell: bash
       run: bash ${{ github.action_path }}/entrypoint.sh
       env:
