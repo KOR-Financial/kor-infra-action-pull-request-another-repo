@@ -96,6 +96,7 @@ then
                #"$PULL_REQUEST_REVIEWERS"
 
   pr_number=$(gh pr list | grep $INPUT_DESTINATION_HEAD_BRANCH | awk '{print $1}')
+  echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
   echo "PR_NUMBER=$pr_number" >> "$GITHUB_OUTPUT"
   echo "PR_NUMBER=$pr_number" >> "$GITHUB_ENV"
 
