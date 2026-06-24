@@ -36,11 +36,6 @@ then
   exit 4
 fi
 
-if [ -n "$INPUT_PULL_REQUEST_REVIEWERS" ]
-then
-  PULL_REQUEST_REVIEWERS='-r '$INPUT_PULL_REQUEST_REVIEWERS
-fi
-
 LABEL_ARGS=()
 if [ -n "$INPUT_LABELS" ]
 then
@@ -65,11 +60,14 @@ create_pull_request() {
                -B "$INPUT_DESTINATION_BASE_BRANCH" \
                -H "$INPUT_DESTINATION_HEAD_BRANCH" \
                "${LABEL_ARGS[@]}"
-               #"$PULL_REQUEST_REVIEWERS"
 }
 
-set_pr_number_output() {
-  pr_number=$(gh pr list --head "$INPUT_DESTINATION_HEAD_BRANCH" --json number --jq '.[0].number')
+get_pr_number() {
+  gh pr list --head "$INPUT_DESTINATION_HEAD_BRANCH" --json number --jq '.[0].number'
+}
+
+write_pr_number_output() {
+  local pr_number="$1"
   echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
   echo "PR_NUMBER=$pr_number" >> "$GITHUB_OUTPUT"
   echo "PR_NUMBER=$pr_number" >> "$GITHUB_ENV"
@@ -80,6 +78,9 @@ copy_source_folders() {
   for i in "${!SOURCE_FOLDERS[@]}"; do
     echo "$i. source = ${SOURCE_FOLDERS[$i]}, dest = ${DESTINATION_FOLDERS[$i]}"
     mkdir -p "$CLONE_DIR/${DESTINATION_FOLDERS[$i]}/"
+    # Intentionally unquoted: lets callers pass 'cp'-style globs (e.g. '*.yml').
+    # The trade-off is that source paths containing spaces are not supported.
+    # shellcheck disable=SC2086
     cp ${SOURCE_FOLDERS[$i]} "$CLONE_DIR/${DESTINATION_FOLDERS[$i]}/"
   done
 }
@@ -89,15 +90,16 @@ copy_source_folders() {
 commit_and_push() {
   echo "Adding git commit"
   git add .
-  if git status | grep -q "Changes to be committed"
+  if git diff --cached --quiet
   then
-    git commit --message "$1"
-    echo "Pushing git commit"
-    git push -uf origin "HEAD:$INPUT_DESTINATION_HEAD_BRANCH"
-  else
     echo "No changes detected"
     return 1
   fi
+  git commit --message "$1"
+  echo "Pushing git commit"
+  # Non-force push: a non-fast-forward (e.g. someone edited the PR branch by
+  # hand) fails loudly instead of silently discarding their commits.
+  git push -u origin "HEAD:$INPUT_DESTINATION_HEAD_BRANCH"
 }
 
 CLONE_DIR=$(mktemp -d)
@@ -117,19 +119,23 @@ if git ls-remote --exit-code --heads origin "$INPUT_DESTINATION_HEAD_BRANCH" >/d
 then
   echo "Destination head branch '$INPUT_DESTINATION_HEAD_BRANCH' already exists, syncing changes"
   git checkout "$INPUT_DESTINATION_HEAD_BRANCH"
-  git pull
+  # --ff-only keeps the intent explicit and avoids set -e aborting the action
+  # on an unexpected merge commit if the branch ever diverges.
+  git pull --ff-only
 
   copy_source_folders
   commit_and_push "chore: Synced with source" || true
 
-  if [ -z "$(gh pr list --head "$INPUT_DESTINATION_HEAD_BRANCH" --json number --jq '.[0].number')" ]
+  pr_number=$(get_pr_number)
+  if [ -z "$pr_number" ]
   then
     echo "No pull request linked to '$INPUT_DESTINATION_HEAD_BRANCH'"
     create_pull_request
+    pr_number=$(get_pr_number)
   else
     echo "Pull request already linked to '$INPUT_DESTINATION_HEAD_BRANCH'"
   fi
-  set_pr_number_output
+  write_pr_number_output "$pr_number"
   exit 0
 fi
 
@@ -140,5 +146,5 @@ git checkout -b "$INPUT_DESTINATION_HEAD_BRANCH"
 if commit_and_push "$INPUT_TITLE"
 then
   create_pull_request
-  set_pr_number_output
+  write_pr_number_output "$(get_pr_number)"
 fi

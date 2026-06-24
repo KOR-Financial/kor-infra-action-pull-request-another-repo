@@ -29,17 +29,14 @@ inputs:
     description: 'The branch into which you want your code merged.'
     required: false
     default: "main"
-  pull_request_reviewers:
-    description: 'Pull request reviewers users'
-    required: false
   labels:
     description: 'Labels to be added to the PR'
     required: false
 
 outputs:
-  pr_number: # number of created pr
+  pr_number: # number of the created or reused pr
     value: ${{steps.create-pr.outputs.PR_NUMBER}}
-    description: 'PR number'
+    description: 'Number of the pull request that was created, or of the existing one when the head branch already had an open PR'
 
 runs:
   using: 'composite'
@@ -58,7 +55,6 @@ runs:
         INPUT_USER_NAME: ${{ inputs.user_name }}
         INPUT_DESTINATION_HEAD_BRANCH: ${{ inputs.destination_head_branch }}
         INPUT_DESTINATION_BASE_BRANCH: ${{ inputs.destination_base_branch }}
-        INPUT_PULL_REQUEST_REVIEWERS: ${{ inputs.pull_request_reviewers }}
         INPUT_LABELS: ${{ inputs.labels }}
 branding:
   icon: 'git-commit'
