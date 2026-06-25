@@ -79,15 +79,15 @@ copy_source_folders() {
     echo "$i. source = ${SOURCE_FOLDERS[$i]}, dest = ${DESTINATION_FOLDERS[$i]}"
     dest_dir="$CLONE_DIR/${DESTINATION_FOLDERS[$i]}"
     mkdir -p "$dest_dir/"
+    # Source paths are relative to the source repository, but this runs after
+    # cd'ing into the destination clone, so resolve them against SOURCE_DIR.
     # Intentionally unquoted: lets callers pass 'cp'-style globs (e.g. '*.yml').
     # The trade-off is that source paths containing spaces are not supported.
     # shellcheck disable=SC2086
-    for src in ${SOURCE_FOLDERS[$i]}; do
+    for src in "$SOURCE_DIR"/${SOURCE_FOLDERS[$i]}; do
       dest="$dest_dir/$(basename "$src")"
-      # Skip when the destination already holds identical content. Besides
-      # avoiding a no-op commit, this is what lets a repo sync into a clone of
-      # itself: there, source and destination resolve to the same file, which
-      # 'cp' refuses to copy ("are the same file") and would abort the action.
+      # Skip when the destination already holds identical content, to avoid a
+      # no-op commit (e.g. when a repo is synced into a clone of itself).
       if [ -f "$dest" ] && cmp -s "$src" "$dest"
       then
         echo "Skipping '$src': identical content already at destination"
@@ -115,6 +115,9 @@ commit_and_push() {
   git push -u origin "HEAD:$INPUT_DESTINATION_HEAD_BRANCH"
 }
 
+# The directory the action was invoked from (the checked-out source repo).
+# Captured before cd'ing into the clone so source paths resolve correctly.
+SOURCE_DIR="$PWD"
 CLONE_DIR=$(mktemp -d)
 echo "env"
 env
