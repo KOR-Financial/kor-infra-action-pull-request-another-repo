@@ -77,11 +77,24 @@ copy_source_folders() {
   echo "Copying contents to git repo"
   for i in "${!SOURCE_FOLDERS[@]}"; do
     echo "$i. source = ${SOURCE_FOLDERS[$i]}, dest = ${DESTINATION_FOLDERS[$i]}"
-    mkdir -p "$CLONE_DIR/${DESTINATION_FOLDERS[$i]}/"
+    dest_dir="$CLONE_DIR/${DESTINATION_FOLDERS[$i]}"
+    mkdir -p "$dest_dir/"
     # Intentionally unquoted: lets callers pass 'cp'-style globs (e.g. '*.yml').
     # The trade-off is that source paths containing spaces are not supported.
     # shellcheck disable=SC2086
-    cp ${SOURCE_FOLDERS[$i]} "$CLONE_DIR/${DESTINATION_FOLDERS[$i]}/"
+    for src in ${SOURCE_FOLDERS[$i]}; do
+      dest="$dest_dir/$(basename "$src")"
+      # Skip when the destination already holds identical content. Besides
+      # avoiding a no-op commit, this is what lets a repo sync into a clone of
+      # itself: there source and destination resolve to the same file, which
+      # 'cp' refuses to copy ("are the same file") and would abort the action.
+      if [ -f "$dest" ] && cmp -s "$src" "$dest"
+      then
+        echo "Skipping '$src': identical content already at destination"
+        continue
+      fi
+      cp "$src" "$dest"
+    done
   done
 }
 
