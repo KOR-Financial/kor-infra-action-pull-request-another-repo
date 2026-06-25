@@ -86,7 +86,7 @@ copy_source_folders() {
       dest="$dest_dir/$(basename "$src")"
       # Skip when the destination already holds identical content. Besides
       # avoiding a no-op commit, this is what lets a repo sync into a clone of
-      # itself: there source and destination resolve to the same file, which
+      # itself: their source and destination resolve to the same file, which
       # 'cp' refuses to copy ("are the same file") and would abort the action.
       if [ -f "$dest" ] && cmp -s "$src" "$dest"
       then
