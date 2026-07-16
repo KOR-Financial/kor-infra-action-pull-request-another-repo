@@ -1,12 +1,7 @@
 #!/usr/bin/env bats
 #
-# Unit tests for the label self-heal logic in entrypoint.sh.
-#
-# entrypoint.sh is sourced (its bottom half is guarded by a BASH_SOURCE check),
-# which defines the functions without running the git/gh orchestration. `gh` is
-# replaced with a fake on PATH that logs every call and simulates PR/label
-# behaviour, so create_pull_request's real branching runs against controlled
-# responses.
+# Unit tests for the label self-heal in entrypoint.sh: source the functions
+# (bottom half is BASH_SOURCE-guarded) and run them against a fake gh on PATH.
 
 setup() {
   ENTRYPOINT="${BATS_TEST_DIRNAME}/../entrypoint.sh"
@@ -46,8 +41,7 @@ case "$1 $2" in
         fi
         ;;
       other_error)
-        # Contains "not found" but NOT "could not add label": the old bare
-        # "not found" match would wrongly self-heal here; the new one must not.
+        # "not found" but not "could not add label" -- must NOT self-heal.
         echo 'failed to create pull request: base branch "main" not found' >&2
         exit 1
         ;;
