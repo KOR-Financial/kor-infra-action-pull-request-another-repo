@@ -74,10 +74,19 @@ ensure_labels() {
   done
 }
 
+open_pr() {
+  gh pr create -t "$INPUT_TITLE" \
+               -b "$INPUT_COMMENT" \
+               -B "$INPUT_DESTINATION_BASE_BRANCH" \
+               -H "$INPUT_DESTINATION_HEAD_BRANCH" \
+               "${LABEL_ARGS[@]}"
+}
+
 create_pull_request() {
   echo "Creating a pull request"
   local pr_stderr
   pr_stderr=$(mktemp)
+  trap 'rm -f "$pr_stderr"' RETURN
   # gh pr create resolves every --label to an existing label ID up front and
   # aborts (exit 1, no PR created) if one is missing -- e.g. the 'app: <service>'
   # label for a brand-new service that nobody has created in the destination
@@ -86,27 +95,23 @@ create_pull_request() {
   # on the rare missing-label failure: create the labels, then retry once. This
   # matches peter-evans/create-pull-request's auto-create behaviour without
   # paying a label lookup on every deployment.
-  if gh pr create -t "$INPUT_TITLE" \
-                  -b "$INPUT_COMMENT" \
-                  -B "$INPUT_DESTINATION_BASE_BRANCH" \
-                  -H "$INPUT_DESTINATION_HEAD_BRANCH" \
-                  "${LABEL_ARGS[@]}" 2>"$pr_stderr"
+  if open_pr 2>"$pr_stderr"
   then
     cat "$pr_stderr" >&2
     return 0
   fi
-
   cat "$pr_stderr" >&2
-  # Any failure other than a missing label is a real error -- propagate it.
-  grep -q "not found" "$pr_stderr" || return 1
+
+  # gh reports a missing label as: could not add label: '<name>' not found.
+  # Match that label-specific phrase (case-insensitively) rather than a bare
+  # "not found" so unrelated 404s (bad repo, missing base branch) don't trigger
+  # a needless label-creation round, and a casing/wording tweak in gh does not
+  # silently defeat the self-heal. Any other failure is real -- propagate it.
+  grep -qi "could not add label" "$pr_stderr" || return 1
 
   echo "PR creation failed on a missing label; creating labels and retrying once"
   ensure_labels
-  gh pr create -t "$INPUT_TITLE" \
-               -b "$INPUT_COMMENT" \
-               -B "$INPUT_DESTINATION_BASE_BRANCH" \
-               -H "$INPUT_DESTINATION_HEAD_BRANCH" \
-               "${LABEL_ARGS[@]}"
+  open_pr
 }
 
 get_pr_number() {
@@ -161,6 +166,13 @@ commit_and_push() {
   # hand) fails loudly instead of silently discarding their commits.
   git push -u origin "HEAD:$INPUT_DESTINATION_HEAD_BRANCH"
 }
+
+# When this file is sourced (e.g. by the test suite) only the function
+# definitions above are needed -- stop before the side-effecting orchestration
+# below, which runs only when the script is executed directly.
+if [ "${BASH_SOURCE[0]}" != "${0}" ]; then
+  return 0
+fi
 
 # The directory the action was invoked from (the checked-out source repo).
 # Captured before cd'ing into the clone so source paths resolve correctly.
