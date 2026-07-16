@@ -37,6 +37,10 @@ then
 fi
 
 LABEL_ARGS=()
+# Parallel array of raw label values (LABEL_ARGS holds the --label flags). Used
+# to create labels in the destination repo when a PR-create fails on a label
+# that does not exist there yet.
+LABELS=()
 if [ -n "$INPUT_LABELS" ]
 then
   # Labels may be passed as a comma-separated list and/or multiline text.
@@ -48,13 +52,56 @@ then
     if [ -n "$label" ]
     then
       LABEL_ARGS+=(--label "$label")
+      LABELS+=("$label")
     fi
   done <<< "${INPUT_LABELS//,/$'\n'}"
   echo "Labels [${LABEL_ARGS[*]}]"
 fi
 
+# Best-effort creation of each label in the destination repo. Only called after
+# a PR-create failed because a label was missing, so this runs rarely. A label
+# that already exists returns non-zero (422) and is left untouched -- we never
+# pass --force, so curated colours/descriptions on existing labels (e.g.
+# 'env: prod') are preserved. A genuine failure (e.g. the token lacking
+# issues:write) is logged, and the retrying gh pr create then fails loudly.
+ensure_labels() {
+  local label
+  for label in "${LABELS[@]}"
+  do
+    echo "Ensuring label exists in destination repo: $label"
+    gh label create "$label" --color ededed \
+      || echo "Note: label '$label' already exists or could not be created"
+  done
+}
+
 create_pull_request() {
   echo "Creating a pull request"
+  local pr_stderr
+  pr_stderr=$(mktemp)
+  # gh pr create resolves every --label to an existing label ID up front and
+  # aborts (exit 1, no PR created) if one is missing -- e.g. the 'app: <service>'
+  # label for a brand-new service that nobody has created in the destination
+  # repo yet. Existing services deploy hundreds of times a week with labels that
+  # already exist, so keep that path free of extra API calls and only self-heal
+  # on the rare missing-label failure: create the labels, then retry once. This
+  # matches peter-evans/create-pull-request's auto-create behaviour without
+  # paying a label lookup on every deployment.
+  if gh pr create -t "$INPUT_TITLE" \
+                  -b "$INPUT_COMMENT" \
+                  -B "$INPUT_DESTINATION_BASE_BRANCH" \
+                  -H "$INPUT_DESTINATION_HEAD_BRANCH" \
+                  "${LABEL_ARGS[@]}" 2>"$pr_stderr"
+  then
+    cat "$pr_stderr" >&2
+    return 0
+  fi
+
+  cat "$pr_stderr" >&2
+  # Any failure other than a missing label is a real error -- propagate it.
+  grep -q "not found" "$pr_stderr" || return 1
+
+  echo "PR creation failed on a missing label; creating labels and retrying once"
+  ensure_labels
   gh pr create -t "$INPUT_TITLE" \
                -b "$INPUT_COMMENT" \
                -B "$INPUT_DESTINATION_BASE_BRANCH" \
