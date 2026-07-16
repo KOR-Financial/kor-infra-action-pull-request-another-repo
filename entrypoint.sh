@@ -37,6 +37,7 @@ then
 fi
 
 LABEL_ARGS=()
+LABELS=()  # raw values, for creating any that are missing on PR failure
 if [ -n "$INPUT_LABELS" ]
 then
   # Labels may be passed as a comma-separated list and/or multiline text.
@@ -48,18 +49,53 @@ then
     if [ -n "$label" ]
     then
       LABEL_ARGS+=(--label "$label")
+      LABELS+=("$label")
     fi
   done <<< "${INPUT_LABELS//,/$'\n'}"
   echo "Labels [${LABEL_ARGS[*]}]"
 fi
 
-create_pull_request() {
-  echo "Creating a pull request"
+# Create missing labels in the destination repo. No --force, so existing labels
+# keep their colour/description; best-effort (a real failure surfaces on retry).
+ensure_labels() {
+  local label
+  for label in "${LABELS[@]}"
+  do
+    echo "Ensuring label exists in destination repo: $label"
+    gh label create "$label" --color ededed \
+      || echo "Note: label '$label' already exists or could not be created"
+  done
+}
+
+open_pr() {
   gh pr create -t "$INPUT_TITLE" \
                -b "$INPUT_COMMENT" \
                -B "$INPUT_DESTINATION_BASE_BRANCH" \
                -H "$INPUT_DESTINATION_HEAD_BRANCH" \
                "${LABEL_ARGS[@]}"
+}
+
+create_pull_request() {
+  echo "Creating a pull request"
+  local pr_stderr
+  pr_stderr=$(mktemp)
+  trap 'rm -f "$pr_stderr"' RETURN
+  # gh pr create aborts (no PR) if a --label doesn't exist. Try once; on a
+  # missing-label failure create the labels and retry. Happy path pays nothing.
+  if open_pr 2>"$pr_stderr"
+  then
+    cat "$pr_stderr" >&2
+    return 0
+  fi
+  cat "$pr_stderr" >&2
+
+  # Self-heal only the missing-label case (gh: "could not add label: 'x' not
+  # found"); matching the label-specific phrase avoids firing on unrelated 404s.
+  grep -qi "could not add label" "$pr_stderr" || return 1
+
+  echo "PR creation failed on a missing label; creating labels and retrying once"
+  ensure_labels
+  open_pr
 }
 
 get_pr_number() {
@@ -114,6 +150,11 @@ commit_and_push() {
   # hand) fails loudly instead of silently discarding their commits.
   git push -u origin "HEAD:$INPUT_DESTINATION_HEAD_BRANCH"
 }
+
+# When sourced (e.g. by tests), stop here: only the functions above are needed.
+if [ "${BASH_SOURCE[0]}" != "${0}" ]; then
+  return 0
+fi
 
 # The directory the action was invoked from (the checked-out source repo).
 # Captured before cd'ing into the clone so source paths resolve correctly.
