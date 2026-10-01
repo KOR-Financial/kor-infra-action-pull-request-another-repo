@@ -3,6 +3,12 @@
 set -e
 #set -x
 
+# gh_retry: retries gh calls through transient GitHub errors, notably the
+# secondary rate limit ("was submitted too quickly") that hits PR creation
+# when many promotions run at once.
+# shellcheck source=gh_retry.sh
+source "$(dirname "${BASH_SOURCE[0]}")/gh_retry.sh"
+
 if [ -z "$INPUT_SOURCE_FOLDERS" ]
 then
   echo "Source folders must be defined"
@@ -62,17 +68,39 @@ ensure_labels() {
   for label in "${LABELS[@]}"
   do
     echo "Ensuring label exists in destination repo: $label"
-    gh label create "$label" --color ededed \
+    gh_retry gh label create "$label" --color ededed \
       || echo "Note: label '$label' already exists or could not be created"
   done
 }
 
+# Retried through transient GitHub errors. A create can land server-side and
+# still report an error, so each retry first checks whether the PR now exists.
 open_pr() {
-  gh pr create -t "$INPUT_TITLE" \
-               -b "$INPUT_COMMENT" \
-               -B "$INPUT_DESTINATION_BASE_BRANCH" \
-               -H "$INPUT_DESTINATION_HEAD_BRANCH" \
-               "${LABEL_ARGS[@]}"
+  gh_retry --check pr_exists_for_head \
+    gh pr create -t "$INPUT_TITLE" \
+                 -b "$INPUT_COMMENT" \
+                 -B "$INPUT_DESTINATION_BASE_BRANCH" \
+                 -H "$INPUT_DESTINATION_HEAD_BRANCH" \
+                 "${LABEL_ARGS[@]}" || return $?
+  # gh adds labels in a second call after creating the PR. When the retry
+  # stopped because the PR already existed, that call may not have run, so
+  # apply the labels now (idempotent; the REST call creates any missing label).
+  if [ "${GH_RETRY_VIA_CHECK:-0}" = "1" ] && [ "${#LABELS[@]}" -gt 0 ]
+  then
+    local pr_number label_fields=() label
+    pr_number=$(get_pr_number)
+    for label in "${LABELS[@]}"
+    do
+      label_fields+=(-f "labels[]=$label")
+    done
+    echo "Pull request #$pr_number already existed after a retry; ensuring its labels"
+    gh_retry gh api -X POST "repos/$INPUT_DESTINATION_REPO/issues/$pr_number/labels" \
+      "${label_fields[@]}" > /dev/null
+  fi
+}
+
+pr_exists_for_head() {
+  [ -n "$(gh pr list --head "$INPUT_DESTINATION_HEAD_BRANCH" --json number --jq '.[0].number')" ]
 }
 
 create_pull_request() {
@@ -99,7 +127,7 @@ create_pull_request() {
 }
 
 get_pr_number() {
-  gh pr list --head "$INPUT_DESTINATION_HEAD_BRANCH" --json number --jq '.[0].number'
+  gh_retry gh pr list --head "$INPUT_DESTINATION_HEAD_BRANCH" --json number --jq '.[0].number'
 }
 
 write_pr_number_output() {
