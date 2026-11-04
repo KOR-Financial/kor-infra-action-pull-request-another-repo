@@ -164,19 +164,22 @@ copy_source_folders() {
 
 # Stages, commits and pushes the working tree. Commit message is the first
 # argument. Returns non-zero (without committing) when there is nothing to commit.
+# Exits the action when a git step fails: callers run this as a condition
+# (`if commit_and_push`, `commit_and_push || true`), where bash ignores set -e,
+# so a returned failure would read as "nothing to commit" and skip the PR.
 commit_and_push() {
   echo "Adding git commit"
-  git add .
+  git add . || exit
   if git diff --cached --quiet
   then
     echo "No changes detected"
     return 1
   fi
-  git commit --message "$1"
+  git commit --message "$1" || exit
   echo "Pushing git commit"
   # Non-force push: a non-fast-forward (e.g. someone edited the PR branch by
   # hand) fails loudly instead of silently discarding their commits.
-  git push -u origin "HEAD:$INPUT_DESTINATION_HEAD_BRANCH"
+  git push -u origin "HEAD:$INPUT_DESTINATION_HEAD_BRANCH" || exit
 }
 
 # When sourced (e.g. by tests), stop here: only the functions above are needed.
